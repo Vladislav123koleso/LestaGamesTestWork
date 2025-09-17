@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.UI; // »спользуйте, если у вас есть UI элементы
-using TMPro; // »спользуйте, если у вас есть TextMeshPro
+using UnityEngine.UI;
+using TMPro; 
 
 public class GameManager : MonoBehaviour
 {
@@ -12,7 +12,7 @@ public class GameManager : MonoBehaviour
     private int turn;
     private bool isPlayerTurn;
 
-    // —сылки на UI (необходимо настроить в инспекторе)
+    
     public GameObject classSelectionPanel;
     public GameObject combatPanel;
     public GameObject gameOverPanel;
