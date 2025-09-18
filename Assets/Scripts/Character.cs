@@ -1,10 +1,14 @@
 using UnityEngine;
 using static Classes;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 
 public class Character
 {
-    public CharacterClass characterClass;
-    public int level;
+    public Dictionary<CharacterClass, int> classLevels;
+    public int TotalLevel => classLevels.Values.Sum();
+
     public int maxHp;
     public int currentHp;
     public int strength;
@@ -13,23 +17,22 @@ public class Character
     public Weapon weapon;
     public int monstersDefeated;
 
-    public Character(CharacterClass characterClass)
+    public Character(CharacterClass startingClass)
     {
-        this.characterClass = characterClass;
-        this.level = 1;
+        classLevels = new Dictionary<CharacterClass, int>
+        {
+            { startingClass, 1 }
+        };
         
         strength = Random.Range(1, 4);
         agility = Random.Range(1, 4);
         stamina = Random.Range(1, 4);
 
-        ClassModifiers modifiers = GetModifiers(characterClass);
-        maxHp = modifiers.hp + stamina;
-        currentHp = maxHp;
-        
-        // Начальное оружие в зависимости от класса
-        weapon = GetInitialWeapon(modifiers.weapon);
+        // Начальное оружие зависит от стартового класса
+        weapon = GetInitialWeapon(GetModifiers(startingClass).weapon);
 
         monstersDefeated = 0;
+        RecalculateStats();
     }
 
     private Weapon GetInitialWeapon(WeaponType weaponType)
@@ -47,25 +50,62 @@ public class Character
         }
     }
 
-    public void LevelUp()
+    public void ApplyLevelUp(CharacterClass classToLevel)
     {
-        level++;
-        ClassModifiers modifiers = GetModifiers(characterClass);
-        maxHp += modifiers.hp + stamina;
-        currentHp = maxHp;
+        if (classLevels.ContainsKey(classToLevel))
+        {
+            classLevels[classToLevel]++;
+        }
+        else
+        {
+            classLevels.Add(classToLevel, 1);
+        }
+        RecalculateStats();
+    }
 
-        // Применение бонусов за уровень
-        if (level == 2)
+    public void RecalculateStats()
+    {
+        // Сброс бонусов перед пересчетом
+        int bonusStrength = 0;
+        int bonusAgility = 0;
+        int bonusStamina = 0;
+        int baseHp = 0;
+
+        foreach (var classLevelPair in classLevels)
         {
-            if (characterClass == CharacterClass.Rogue) agility++;
-            if (characterClass == CharacterClass.Warrior) { /* Логика щита в бою */ }
-            if (characterClass == CharacterClass.Barbarian) { /* Логика каменной кожи в бою */ }
+            CharacterClass charClass = classLevelPair.Key;
+            int level = classLevelPair.Value;
+            ClassModifiers modifiers = GetModifiers(charClass);
+            
+            baseHp += modifiers.hp * level;
+
+            // Применяем бонусы за каждый уровень в классе
+            for (int i = 2; i <= level; i++)
+            {
+                if (i == 2)
+                {
+                    if (charClass == CharacterClass.Rogue) bonusAgility++;
+                }
+                else if (i == 3)
+                {
+                    if (charClass == CharacterClass.Warrior) bonusStrength++;
+                    if (charClass == CharacterClass.Barbarian) bonusStamina++;
+                }
+            }
         }
-        else if (level == 3)
+
+        // Обновляем итоговые характеристики
+        maxHp = baseHp + stamina + (bonusStamina * TotalLevel); // Выносливость дает HP за каждый общий уровень
+        currentHp = maxHp;
+    }
+
+    public string GetClassLevelSummary()
+    {
+        StringBuilder summary = new StringBuilder();
+        foreach (var pair in classLevels)
         {
-            if (characterClass == CharacterClass.Rogue) { /* Логика яда в бою */ }
-            if (characterClass == CharacterClass.Warrior) strength++;
-            if (characterClass == CharacterClass.Barbarian) stamina++;
+            summary.Append($"{pair.Key} (Ур. {pair.Value}) ");
         }
+        return summary.ToString().Trim();
     }
 }

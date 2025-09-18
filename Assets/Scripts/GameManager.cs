@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro; 
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
@@ -12,13 +13,17 @@ public class GameManager : MonoBehaviour
     private int turn;
     private bool isPlayerTurn;
 
+    private enum ClassChoiceMode { Initial, LevelUp };
+    private ClassChoiceMode currentClassChoiceMode;
+
     
-    public GameObject classSelectionPanel;
+    public GameObject classChoicePanel; 
     public GameObject combatPanel;
     public GameObject gameOverPanel;
     public GameObject victoryPanel;
     public GameObject weaponChoicePanel;
 
+    
     public TextMeshProUGUI combatLogText;
     public TextMeshProUGUI playerStatsText;
     public TextMeshProUGUI monsterStatsText;
@@ -39,15 +44,7 @@ public class GameManager : MonoBehaviour
 
     void Start()
     {
-        ShowClassSelection();
-    }
-
-    public void SelectClass(int classIndex)
-    {
-        Classes.CharacterClass selectedClass = (Classes.CharacterClass)classIndex;
-        playerCharacter = new Character(selectedClass);
-        classSelectionPanel.SetActive(false);
-        StartNextFight();
+        ShowInitialClassChoice();
     }
 
     private void StartNextFight()
@@ -58,20 +55,21 @@ public class GameManager : MonoBehaviour
             return;
         }
 
-        currentMonster = new Monster(playerCharacter.level);
+        currentMonster = new Monster(playerCharacter.TotalLevel);
         UpdateStatsUI();
         combatPanel.SetActive(true);
         gameOverPanel.SetActive(false);
         victoryPanel.SetActive(false);
         weaponChoicePanel.SetActive(false);
+        classChoicePanel.SetActive(false);
         combatLogText.text = $"На вас напал {currentMonster.type}!\n";
         StartCoroutine(CombatLoop());
     }
 
     private void UpdateStatsUI()
     {
-        playerStatsText.text = $"Игрок ({playerCharacter.characterClass})\n" +
-                               $"Уровень: {playerCharacter.level}\n" +
+        playerStatsText.text = $"Игрок ({playerCharacter.GetClassLevelSummary()})\n" +
+                               $"Общий уровень: {playerCharacter.TotalLevel}\n" +
                                $"HP: {playerCharacter.currentHp}/{playerCharacter.maxHp}\n" +
                                $"Сила: {playerCharacter.strength}\n" +
                                $"Ловкость: {playerCharacter.agility}\n" +
@@ -142,26 +140,32 @@ public class GameManager : MonoBehaviour
         int baseDamage = playerCharacter.weapon.GetDamage() + playerCharacter.strength;
         int finalDamage = baseDamage;
 
-        // Бонусы классов
-        switch (playerCharacter.characterClass)
+        // Применяем бонусы от всех классов
+        foreach (var classLevelPair in playerCharacter.classLevels)
         {
-            case Classes.CharacterClass.Rogue:
-                if (playerCharacter.level >= 1 && playerCharacter.agility > currentMonster.agility)
-                    finalDamage++; // Скрытая атака
-                if (playerCharacter.level >= 3 && turn > 1)
-                    finalDamage += (turn - 1); // Яд
-                break;
-            case Classes.CharacterClass.Warrior:
-                if (playerCharacter.level >= 1 && turn == 1)
-                    finalDamage *= 2; // Порыв к действию
-                break;
-            case Classes.CharacterClass.Barbarian:
-                if (playerCharacter.level >= 1)
-                {
-                    if (turn <= 3) finalDamage += 2; // Ярость
-                    else finalDamage--;
-                }
-                break;
+            var charClass = classLevelPair.Key;
+            var level = classLevelPair.Value;
+
+            switch (charClass)
+            {
+                case Classes.CharacterClass.Rogue:
+                    if (level >= 1 && playerCharacter.agility > currentMonster.agility)
+                        finalDamage++; // Скрытая атака
+                    if (level >= 3 && turn > 1)
+                        finalDamage += (turn - 1); // Яд
+                    break;
+                case Classes.CharacterClass.Warrior:
+                    if (level >= 1 && turn == 1)
+                        finalDamage *= 2; // Порыв к действию
+                    break;
+                case Classes.CharacterClass.Barbarian:
+                    if (level >= 1)
+                    {
+                        if (turn <= 3) finalDamage += 2; // Ярость
+                        else finalDamage--;
+                    }
+                    break;
+            }
         }
         return Mathf.Max(0, finalDamage);
     }
@@ -171,17 +175,23 @@ public class GameManager : MonoBehaviour
         int baseDamage = currentMonster.weapon.GetDamage() + currentMonster.strength;
         int finalDamage = baseDamage;
 
-        // Бонусы защиты игрока
-        switch (playerCharacter.characterClass)
+        // Применяем бонусы защиты от всех классов
+        foreach (var classLevelPair in playerCharacter.classLevels)
         {
-            case Classes.CharacterClass.Warrior:
-                if (playerCharacter.level >= 2 && playerCharacter.strength > currentMonster.strength)
-                    finalDamage -= 3; // Щит
-                break;
-            case Classes.CharacterClass.Barbarian:
-                if (playerCharacter.level >= 2)
-                    finalDamage -= playerCharacter.stamina; // Каменная кожа
-                break;
+            var charClass = classLevelPair.Key;
+            var level = classLevelPair.Value;
+
+            switch (charClass)
+            {
+                case Classes.CharacterClass.Warrior:
+                    if (level >= 2 && playerCharacter.strength > currentMonster.strength)
+                        finalDamage -= 3; // Щит
+                    break;
+                case Classes.CharacterClass.Barbarian:
+                    if (level >= 2)
+                        finalDamage -= playerCharacter.stamina; // Каменная кожа
+                    break;
+            }
         }
         return Mathf.Max(0, finalDamage);
     }
@@ -190,12 +200,31 @@ public class GameManager : MonoBehaviour
     {
         combatLogText.text += "Вы победили!\n";
         playerCharacter.monstersDefeated++;
-        playerCharacter.LevelUp();
-        
-        combatPanel.SetActive(false);
+
+        if (playerCharacter.TotalLevel < 3)
+        {
+            ShowLevelUpChoice();
+        }
+        else
+        {
+            playerCharacter.RecalculateStats(); // Восстанавливаем HP на макс. уровне
+            ShowWeaponChoice();
+        }
+    }
+
+    private void ShowLevelUpChoice()
+    {
+        currentClassChoiceMode = ClassChoiceMode.LevelUp;
+        classChoicePanel.SetActive(true);
+    }
+
+    private void ShowWeaponChoice()
+    {
         weaponChoicePanel.SetActive(true);
-        weaponChoiceText.text = $"Вы нашли {currentMonster.weapon.name} ({currentMonster.weapon.minDamage}-{currentMonster.weapon.maxDamage}).\n" +
-                                $"Ваше текущее оружие: {playerCharacter.weapon.name} ({playerCharacter.weapon.minDamage}-{playerCharacter.weapon.maxDamage}).\n" +
+        
+        Weapon newWeapon = currentMonster.weapon;
+        weaponChoiceText.text = $"Вы нашли: <b>{newWeapon.name}</b> (Урон: {newWeapon.minDamage}-{newWeapon.maxDamage})\n" +
+                                $"Ваше текущее оружие: {playerCharacter.weapon.name} (Урон: {playerCharacter.weapon.minDamage}-{playerCharacter.weapon.maxDamage})\n\n" +
                                 "Хотите заменить?";
     }
 
@@ -210,29 +239,49 @@ public class GameManager : MonoBehaviour
 
     private void GameOver()
     {
-        combatPanel.SetActive(false);
+        
         gameOverPanel.SetActive(true);
     }
 
     private void GameWon()
     {
-        combatPanel.SetActive(false);
+        
         victoryPanel.SetActive(true);
     }
 
     public void RestartGame()
     {
-        gameOverPanel.SetActive(false);
-        victoryPanel.SetActive(false);
-        ShowClassSelection();
+        // Уничтожаем GameManager, чтобы при перезагрузке сцены создался новый
+        Destroy(gameObject);
+        // Перезагружаем текущую сцену
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 
-    private void ShowClassSelection()
+    private void ShowInitialClassChoice()
     {
-        classSelectionPanel.SetActive(true);
+        currentClassChoiceMode = ClassChoiceMode.Initial;
+        classChoicePanel.SetActive(true);
+
         combatPanel.SetActive(false);
         gameOverPanel.SetActive(false);
         victoryPanel.SetActive(false);
         weaponChoicePanel.SetActive(false);
+    }
+
+    public void OnClassChoice(int classIndex)
+    {
+        classChoicePanel.SetActive(false);
+        Classes.CharacterClass selectedClass = (Classes.CharacterClass)classIndex;
+
+        if (currentClassChoiceMode == ClassChoiceMode.Initial)
+        {
+            playerCharacter = new Character(selectedClass);
+            StartNextFight();
+        }
+        else // LevelUp
+        {
+            playerCharacter.ApplyLevelUp(selectedClass);
+            ShowWeaponChoice();
+        }
     }
 }

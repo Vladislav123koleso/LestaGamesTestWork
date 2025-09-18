@@ -6,6 +6,7 @@ public struct Weapon
     public WeaponType type;
     public int minDamage;
     public int maxDamage;
+    
 
     public Weapon(string name, WeaponType type, int minDamage, int maxDamage)
     {
@@ -13,6 +14,7 @@ public struct Weapon
         this.type = type;
         this.minDamage = minDamage;
         this.maxDamage = maxDamage;
+        
     }
 
     public int GetDamage()

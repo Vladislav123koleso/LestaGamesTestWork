@@ -22,14 +22,24 @@ public class Monster
         stamina = Random.Range(playerLevel, playerLevel + 2);
         maxHp = 5 + (stamina * 2);
         currentHp = maxHp;
-        weapon = GetRandomWeapon();
+        weapon = GetWeaponForMonsterType(playerLevel);
     }
 
-    private Weapon GetRandomWeapon()
+    private Weapon GetWeaponForMonsterType(int playerLevel)
     {
-        WeaponType randomType = (WeaponType)Random.Range(0, System.Enum.GetValues(typeof(WeaponType)).Length);
-        int minDamage = Random.Range(1, 4);
-        int maxDamage = Random.Range(minDamage, minDamage + 3);
-        return new Weapon($"{randomType} монстра", randomType, minDamage, maxDamage);
+        int minDmg = playerLevel;
+        int maxDmg = playerLevel + 3;
+
+        switch (type)
+        {
+            case MobType.Goblin:
+                return new Weapon("Ржавый кинжал", WeaponType.Dagger, minDmg, maxDmg);
+            case MobType.Skeleton:
+                return new Weapon("Старый меч", WeaponType.Sword, minDmg + 1, maxDmg);
+            case MobType.Slime:
+                return new Weapon("Костяное копье", WeaponType.Spear, minDmg, maxDmg + 1);
+            default:
+                return new Weapon("Неизвестное оружие", WeaponType.Club, 1, 2);
+        }
     }
-}   
+}
