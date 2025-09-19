@@ -17,6 +17,11 @@ public class Character
     public Weapon weapon;
     public int monstersDefeated;
 
+    // Базовые значения, полученные при создании персонажа
+    private int baseStrength;
+    private int baseAgility;
+    private int baseStamina;
+
     public Character(CharacterClass startingClass)
     {
         classLevels = new Dictionary<CharacterClass, int>
@@ -24,29 +29,29 @@ public class Character
             { startingClass, 1 }
         };
         
-        strength = Random.Range(1, 4);
-        agility = Random.Range(1, 4);
-        stamina = Random.Range(1, 4);
+        baseStrength = Random.Range(1, 4);
+        baseAgility = Random.Range(1, 4);
+        baseStamina = Random.Range(1, 4);
 
         // Начальное оружие зависит от стартового класса
-        weapon = GetInitialWeapon(GetModifiers(startingClass).weapon);
+        weapon = GetInitialWeapon(startingClass);
 
         monstersDefeated = 0;
         RecalculateStats();
     }
 
-    private Weapon GetInitialWeapon(WeaponType weaponType)
+    private Weapon GetInitialWeapon(CharacterClass startingClass)
     {
-        switch (weaponType)
+        switch (startingClass)
         {
-            case WeaponType.Dagger:
-                return new Weapon("Кинжал", WeaponType.Dagger, 1, 4);
-            case WeaponType.Sword:
-                return new Weapon("Меч", WeaponType.Sword, 2, 5);
-            case WeaponType.Club:
-                return new Weapon("Дубина", WeaponType.Club, 3, 6);
+            case CharacterClass.Warrior:
+                return WeaponDatabase.GetWeapon(WeaponDatabase.WeaponID.PlayerSword);
+            case CharacterClass.Barbarian:
+                return WeaponDatabase.GetWeapon(WeaponDatabase.WeaponID.PlayerClub);
+            case CharacterClass.Rogue:
+                return WeaponDatabase.GetWeapon(WeaponDatabase.WeaponID.PlayerDagger);
             default:
-                return new Weapon("Кулаки", WeaponType.Club, 1, 2);
+                return new Weapon("Кулаки", WeaponType.Club, 1, 1);
         }
     }
 
@@ -65,11 +70,10 @@ public class Character
 
     public void RecalculateStats()
     {
-        // Сброс бонусов перед пересчетом
         int bonusStrength = 0;
         int bonusAgility = 0;
         int bonusStamina = 0;
-        int baseHp = 0;
+        int baseHpFromClasses = 0;
 
         foreach (var classLevelPair in classLevels)
         {
@@ -77,25 +81,21 @@ public class Character
             int level = classLevelPair.Value;
             ClassModifiers modifiers = GetModifiers(charClass);
             
-            baseHp += modifiers.hp * level;
+            baseHpFromClasses += modifiers.hp * level;
 
             // Применяем бонусы за каждый уровень в классе
-            for (int i = 2; i <= level; i++)
-            {
-                if (i == 2)
-                {
-                    if (charClass == CharacterClass.Rogue) bonusAgility++;
-                }
-                else if (i == 3)
-                {
-                    if (charClass == CharacterClass.Warrior) bonusStrength++;
-                    if (charClass == CharacterClass.Barbarian) bonusStamina++;
-                }
-            }
+            if (charClass == CharacterClass.Rogue && level >= 2) bonusAgility++;
+            if (charClass == CharacterClass.Warrior && level >= 3) bonusStrength++;
+            if (charClass == CharacterClass.Barbarian && level >= 3) bonusStamina++;
         }
 
         // Обновляем итоговые характеристики
-        maxHp = baseHp + stamina + (bonusStamina * TotalLevel); // Выносливость дает HP за каждый общий уровень
+        strength = baseStrength + bonusStrength;
+        agility = baseAgility + bonusAgility;
+        stamina = baseStamina + bonusStamina;
+
+        // Здоровье = (базовое от классов) + (выносливость * общий уровень персонажа)
+        maxHp = baseHpFromClasses + (stamina * TotalLevel);
         currentHp = maxHp;
     }
 

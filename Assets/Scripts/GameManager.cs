@@ -83,10 +83,12 @@ public class GameManager : MonoBehaviour
                                 $"Выносливость: {currentMonster.stamina}";
     }
 
-    private IEnumerator CombatLoop()
+    private IEnumerator CombatLoop()    
     {
         turn = 1;
-        isPlayerTurn = true;
+        // Определение очередности хода
+        isPlayerTurn = playerCharacter.agility >= currentMonster.agility;
+        combatLogText.text += isPlayerTurn ? "Вы ходите первым!\n" : $"{currentMonster.type} ходит первым!\n";
 
         while (playerCharacter.currentHp > 0 && currentMonster.currentHp > 0)
         {
@@ -94,11 +96,11 @@ public class GameManager : MonoBehaviour
 
             if (isPlayerTurn)
             {
-                PlayerAttack();
+                PerformPlayerAttack();
             }
             else
             {
-                MonsterAttack();
+                PerformMonsterAttack();
             }
 
             UpdateStatsUI();
@@ -121,79 +123,103 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void PlayerAttack()
+    private void PerformPlayerAttack()
     {
-        int damage = CalculatePlayerDamage();
+        // 1. Шанс попадания
+        int hitRoll = Random.Range(1, playerCharacter.agility + currentMonster.agility + 1);
+        if (hitRoll <= currentMonster.agility)
+        {
+            combatLogText.text += $"Ход {turn}: Игрок атакует, но промахивается!\n";
+            return;
+        }
+
+        // 2. Изначальный урон
+        int weaponDamage = playerCharacter.weapon.GetDamage();
+        int damage = playerCharacter.strength;
+        string vulnerabilityMessage = "";
+
+        if (currentMonster.type == Classes.MobType.Slime && 
+            (playerCharacter.weapon.type == Classes.WeaponType.Sword || playerCharacter.weapon.type == Classes.WeaponType.Axe))
+        {
+            weaponDamage = 0;
+            vulnerabilityMessage = " Слизь поглощает рубящий удар!";
+        }
+        
+        damage += weaponDamage;
+
+        // 3. Эффекты атакующего (игрока)
+        if (playerCharacter.classLevels.TryGetValue(Classes.CharacterClass.Warrior, out int warriorLvl) && warriorLvl >= 1 && turn == 1)
+        {
+            damage += weaponDamage;
+        }
+        if (playerCharacter.classLevels.TryGetValue(Classes.CharacterClass.Barbarian, out int barbarianLvl) && barbarianLvl >= 1)
+        {
+            if (turn <= 3) damage += 2;
+            else damage--;
+        }
+        if (playerCharacter.classLevels.TryGetValue(Classes.CharacterClass.Rogue, out int rogueLvl))
+        {
+            if (rogueLvl >= 1 && playerCharacter.agility > currentMonster.agility) damage++;
+            if (rogueLvl >= 3 && turn > 1) damage += (turn - 1);
+        }
+        
+        // 4. Эффекты цели (монстра)
+        if (currentMonster.type == Classes.MobType.Golem)
+        {
+            damage -= currentMonster.stamina; // Каменная кожа Голема
+            vulnerabilityMessage += " Каменная кожа Голема поглощает часть урона.";
+        }
+        if (currentMonster.type == Classes.MobType.Skeleton && playerCharacter.weapon.type == Classes.WeaponType.Club)
+        {
+            damage *= 2;
+            vulnerabilityMessage = " Скелет уязвим к дробящему оружию! Урон удвоен.";
+        }
+
+        // 5. Вычитание урона
+        damage = Mathf.Max(0, damage);
         currentMonster.currentHp -= damage;
-        combatLogText.text += $"Ход {turn}: Игрок атакует и наносит {damage} урона.\n";
+        combatLogText.text += $"Ход {turn}: Игрок попадает и наносит {damage} урона.{vulnerabilityMessage}\n";
     }
 
-    private void MonsterAttack()
+    private void PerformMonsterAttack()
     {
-        int damage = CalculateMonsterDamage();
+        // 1. Шанс попадания
+        int hitRoll = Random.Range(1, currentMonster.agility + playerCharacter.agility + 1);
+        if (hitRoll <= playerCharacter.agility)
+        {
+            combatLogText.text += $"Ход {turn}: {currentMonster.type} атакует, но промахивается!\n";
+            return;
+        }
+
+        // 2. Изначальный урон
+        int damage = currentMonster.damage;
+        string specialAttackMessage = "";
+
+        // 3. Эффекты атакующего (монстра)
+        if (currentMonster.type == Classes.MobType.Ghost && currentMonster.agility > playerCharacter.agility)
+        {
+            damage++; // Скрытая атака Призрака
+        }
+        if (currentMonster.type == Classes.MobType.Dragon && turn % 3 == 0)
+        {
+            damage += 3; // Огненное дыхание Дракона
+            specialAttackMessage = " Дракон дышит огнем!";
+        }
+
+        // 4. Эффекты цели (игрока)
+        if (playerCharacter.classLevels.TryGetValue(Classes.CharacterClass.Barbarian, out int barbarianLvl) && barbarianLvl >= 2)
+        {
+            damage -= playerCharacter.stamina;
+        }
+        if (playerCharacter.classLevels.TryGetValue(Classes.CharacterClass.Warrior, out int warriorLvl) && warriorLvl >= 2 && playerCharacter.strength > currentMonster.strength)
+        {
+            damage -= 3;
+        }
+
+        // 5. Вычитание урона
+        damage = Mathf.Max(0, damage);
         playerCharacter.currentHp -= damage;
-        combatLogText.text += $"Ход {turn}: {currentMonster.type} атакует и наносит {damage} урона.\n";
-    }
-
-    private int CalculatePlayerDamage()
-    {
-        int baseDamage = playerCharacter.weapon.GetDamage() + playerCharacter.strength;
-        int finalDamage = baseDamage;
-
-        // Применяем бонусы от всех классов
-        foreach (var classLevelPair in playerCharacter.classLevels)
-        {
-            var charClass = classLevelPair.Key;
-            var level = classLevelPair.Value;
-
-            switch (charClass)
-            {
-                case Classes.CharacterClass.Rogue:
-                    if (level >= 1 && playerCharacter.agility > currentMonster.agility)
-                        finalDamage++; // Скрытая атака
-                    if (level >= 3 && turn > 1)
-                        finalDamage += (turn - 1); // Яд
-                    break;
-                case Classes.CharacterClass.Warrior:
-                    if (level >= 1 && turn == 1)
-                        finalDamage *= 2; // Порыв к действию
-                    break;
-                case Classes.CharacterClass.Barbarian:
-                    if (level >= 1)
-                    {
-                        if (turn <= 3) finalDamage += 2; // Ярость
-                        else finalDamage--;
-                    }
-                    break;
-            }
-        }
-        return Mathf.Max(0, finalDamage);
-    }
-
-    private int CalculateMonsterDamage()
-    {
-        int baseDamage = currentMonster.weapon.GetDamage() + currentMonster.strength;
-        int finalDamage = baseDamage;
-
-        // Применяем бонусы защиты от всех классов
-        foreach (var classLevelPair in playerCharacter.classLevels)
-        {
-            var charClass = classLevelPair.Key;
-            var level = classLevelPair.Value;
-
-            switch (charClass)
-            {
-                case Classes.CharacterClass.Warrior:
-                    if (level >= 2 && playerCharacter.strength > currentMonster.strength)
-                        finalDamage -= 3; // Щит
-                    break;
-                case Classes.CharacterClass.Barbarian:
-                    if (level >= 2)
-                        finalDamage -= playerCharacter.stamina; // Каменная кожа
-                    break;
-            }
-        }
-        return Mathf.Max(0, finalDamage);
+        combatLogText.text += $"Ход {turn}: {currentMonster.type} попадает и наносит {damage} урона.{specialAttackMessage}\n";
     }
 
     private void PlayerWon()
@@ -207,7 +233,7 @@ public class GameManager : MonoBehaviour
         }
         else
         {
-            playerCharacter.RecalculateStats(); // Восстанавливаем HP на макс. уровне
+            playerCharacter.RecalculateStats();
             ShowWeaponChoice();
         }
     }
@@ -222,7 +248,7 @@ public class GameManager : MonoBehaviour
     {
         weaponChoicePanel.SetActive(true);
         
-        Weapon newWeapon = currentMonster.weapon;
+        Weapon newWeapon = currentMonster.droppedWeapon;
         weaponChoiceText.text = $"Вы нашли: <b>{newWeapon.name}</b> (Урон: {newWeapon.minDamage}-{newWeapon.maxDamage})\n" +
                                 $"Ваше текущее оружие: {playerCharacter.weapon.name} (Урон: {playerCharacter.weapon.minDamage}-{playerCharacter.weapon.maxDamage})\n\n" +
                                 "Хотите заменить?";
@@ -232,7 +258,7 @@ public class GameManager : MonoBehaviour
     {
         if (replace)
         {
-            playerCharacter.weapon = currentMonster.weapon;
+            playerCharacter.weapon = currentMonster.droppedWeapon;
         }
         StartNextFight();
     }
@@ -251,9 +277,7 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
-        // Уничтожаем GameManager, чтобы при перезагрузке сцены создался новый
         Destroy(gameObject);
-        // Перезагружаем текущую сцену
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
 

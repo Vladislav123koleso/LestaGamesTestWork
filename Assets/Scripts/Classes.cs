@@ -16,14 +16,18 @@ public class Classes
         Sword,  // Рубящее
         Club,   // Дробящее
         Dagger, // Колющее
-        Spear   // Копье
+        Spear,  // Копье
+        Axe     // Рубящее
     }
 
     public enum MobType
     {
         Goblin,
         Skeleton,
-        Slime
+        Slime,
+        Ghost,
+        Golem,
+        Dragon
     }
 
     public struct ClassModifiers
