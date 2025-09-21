@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro; 
@@ -15,6 +16,9 @@ public class GameManager : MonoBehaviour
 
     private enum ClassChoiceMode { Initial, LevelUp };
     private ClassChoiceMode currentClassChoiceMode;
+
+    private List<string> combatLogs = new List<string>();
+    private const int MaxLogMessages = 5;
 
     
     public GameObject classChoicePanel; 
@@ -62,7 +66,9 @@ public class GameManager : MonoBehaviour
         victoryPanel.SetActive(false);
         weaponChoicePanel.SetActive(false);
         classChoicePanel.SetActive(false);
-        combatLogText.text = $"На вас напал {currentMonster.type}!\n";
+        
+        ClearCombatLog();
+        AddCombatLog($"На вас напал {currentMonster.type}!");
         StartCoroutine(CombatLoop());
     }
 
@@ -88,7 +94,7 @@ public class GameManager : MonoBehaviour
         turn = 1;
         // Определение очередности хода
         isPlayerTurn = playerCharacter.agility >= currentMonster.agility;
-        combatLogText.text += isPlayerTurn ? "Вы ходите первым!\n" : $"{currentMonster.type} ходит первым!\n";
+        AddCombatLog(isPlayerTurn ? "Вы ходите первым!" : $"{currentMonster.type} ходит первым!");
 
         while (playerCharacter.currentHp > 0 && currentMonster.currentHp > 0)
         {
@@ -129,7 +135,7 @@ public class GameManager : MonoBehaviour
         int hitRoll = Random.Range(1, playerCharacter.agility + currentMonster.agility + 1);
         if (hitRoll <= currentMonster.agility)
         {
-            combatLogText.text += $"Ход {turn}: Игрок атакует, но промахивается!\n";
+            AddCombatLog($"Ход {turn}: Игрок атакует, но промахивается!");
             return;
         }
 
@@ -166,7 +172,7 @@ public class GameManager : MonoBehaviour
         // 4. Эффекты цели (монстра)
         if (currentMonster.type == Classes.MobType.Golem)
         {
-            damage -= currentMonster.stamina; // Каменная кожа Голема
+            damage -= currentMonster.stamina;
             vulnerabilityMessage += " Каменная кожа Голема поглощает часть урона.";
         }
         if (currentMonster.type == Classes.MobType.Skeleton && playerCharacter.weapon.type == Classes.WeaponType.Club)
@@ -178,7 +184,7 @@ public class GameManager : MonoBehaviour
         // 5. Вычитание урона
         damage = Mathf.Max(0, damage);
         currentMonster.currentHp -= damage;
-        combatLogText.text += $"Ход {turn}: Игрок попадает и наносит {damage} урона.{vulnerabilityMessage}\n";
+        AddCombatLog($"Ход {turn}: Игрок попадает и наносит {damage} урона.{vulnerabilityMessage}");
     }
 
     private void PerformMonsterAttack()
@@ -187,7 +193,7 @@ public class GameManager : MonoBehaviour
         int hitRoll = Random.Range(1, currentMonster.agility + playerCharacter.agility + 1);
         if (hitRoll <= playerCharacter.agility)
         {
-            combatLogText.text += $"Ход {turn}: {currentMonster.type} атакует, но промахивается!\n";
+            AddCombatLog($"Ход {turn}: {currentMonster.type} атакует, но промахивается!");
             return;
         }
 
@@ -198,11 +204,11 @@ public class GameManager : MonoBehaviour
         // 3. Эффекты атакующего (монстра)
         if (currentMonster.type == Classes.MobType.Ghost && currentMonster.agility > playerCharacter.agility)
         {
-            damage++; // Скрытая атака Призрака
+            damage++;
         }
         if (currentMonster.type == Classes.MobType.Dragon && turn % 3 == 0)
         {
-            damage += 3; // Огненное дыхание Дракона
+            damage += 3;
             specialAttackMessage = " Дракон дышит огнем!";
         }
 
@@ -219,12 +225,12 @@ public class GameManager : MonoBehaviour
         // 5. Вычитание урона
         damage = Mathf.Max(0, damage);
         playerCharacter.currentHp -= damage;
-        combatLogText.text += $"Ход {turn}: {currentMonster.type} попадает и наносит {damage} урона.{specialAttackMessage}\n";
+        AddCombatLog($"Ход {turn}: {currentMonster.type} попадает и наносит {damage} урона.{specialAttackMessage}");
     }
 
     private void PlayerWon()
     {
-        combatLogText.text += "Вы победили!\n";
+        AddCombatLog("Вы победили!");
         playerCharacter.monstersDefeated++;
 
         if (playerCharacter.TotalLevel < 3)
@@ -265,13 +271,13 @@ public class GameManager : MonoBehaviour
 
     private void GameOver()
     {
-        
+        AddCombatLog("Вы проиграли...");
         gameOverPanel.SetActive(true);
     }
 
     private void GameWon()
     {
-        
+        AddCombatLog("Поздравляем! Вы прошли игру!");
         victoryPanel.SetActive(true);
     }
 
@@ -307,5 +313,21 @@ public class GameManager : MonoBehaviour
             playerCharacter.ApplyLevelUp(selectedClass);
             ShowWeaponChoice();
         }
+    }
+
+    private void AddCombatLog(string message)
+    {
+        combatLogs.Add(message);
+        if (combatLogs.Count > MaxLogMessages)
+        {
+            combatLogs.RemoveAt(0);
+        }
+        combatLogText.text = string.Join("\n", combatLogs);
+    }
+
+    private void ClearCombatLog()
+    {
+        combatLogs.Clear();
+        combatLogText.text = "";
     }
 }

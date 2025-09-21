@@ -23,48 +23,42 @@ public class PauseManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Ставит игру на паузу.
-    /// </summary>
+    // Ставим игру на паузу.
     public void PauseGame()
     {
         if (pauseMenuPanel != null)
         {
             pauseMenuPanel.SetActive(true);
         }
-        Time.timeScale = 0f; // Останавливаем время в игре
+        Time.timeScale = 0f; 
         IsPaused = true;
     }
 
-    /// <summary>
-    /// Снимает игру с паузы. Этот метод будет вызываться кнопкой "Продолжить".
-    /// </summary>
+    
+    // Снимаем игру с паузы.  
     public void ResumeGame()
     {
         if (pauseMenuPanel != null)
         {
             pauseMenuPanel.SetActive(false);
         }
-        Time.timeScale = 1f; // Возобновляем течение времени
+        Time.timeScale = 1f; // Возобновляем 
         IsPaused = false;
     }
 
-    /// <summary>
-    /// Выходит в главное меню. Этот метод будет вызываться кнопкой "Выйти в меню".
-    /// </summary>
+    // Выходит в главное меню. Этот метод будет вызываться кнопкой "Выйти в меню".
     public void GoToMainMenu()
     {
-        // Важно сбросить Time.timeScale перед загрузкой другой сцены
         Time.timeScale = 1f;
         IsPaused = false;
         
-        // Уничтожаем GameManager, чтобы он не дублировался при возвращении в игру
+        
         if (GameManager.Instance != null)
         {
             Destroy(GameManager.Instance.gameObject);
         }
 
-        // Убедитесь, что у вас есть сцена с именем "MainMenu"
+        
         SceneManager.LoadScene("MainMenu");
     }
 }
